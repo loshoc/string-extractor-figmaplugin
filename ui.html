@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      padding: 14px;
+      font-family: monospace;
+    }
+    input, select {
+      display: block;
+      width: 100%;
+      margin-bottom: 20px;
+      padding: 8px 0;
+      border: none;
+      border-bottom: 1px solid #ccc;
+      background: transparent;
+      font-size: 16px;
+      font-family: monospace;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-bottom: 1px solid #18A0FB;
+    }
+    button {
+      background-color: #000000;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-family: monospace;
+    }
+    #extract {
+      width: 100%;
+    }
+    button:hover {
+      background-color: #4d4d4d;
+    }
+    #result, #export-buttons {
+      display: none;
+      margin-top: 20px;
+    }
+    #export-content {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #export-buttons p {
+      flex: 1;
+      margin: 0;
+      color: #999;
+      white-space: nowrap;
+    }
+    #result {
+      padding: 10px;
+      background-color: #F0F0F0;
+      border-radius: 6px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      max-height: 190px;
+      overflow-y: auto;
+    }
+    p {
+      color: #999;
+    }
+    .checkbox-container {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .checkbox-container input[type="checkbox"] {
+      margin: 0;
+      width: auto;
+      height: 16px;
+      width: 16px;
+    }
+    .checkbox-container label {
+      margin-left: 8px;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <p>Prefix</p>
+  <input type="text" id="prefix" placeholder="Enter prefix (e.g., text_)" value="text_">
+  <div class="checkbox-container">
+    <input type="checkbox" id="extract-all-pages">
+    <label for="extract-all-pages">All pages</label>
+  </div>
+  <button id="extract">Extract Strings</button>
+  <pre id="result"></pre>
+  <div id="export-buttons">
+    <div id="export-content">
+      <p>Export as</p>
+      <button id="export-json">JSON</button>
+      <button id="export-csv">CSV</button>
+    </div>
+  </div>
+  <script>
+    document.getElementById('extract').onclick = () => {
+      const prefix = document.getElementById('prefix').value;
+      const extractAllPages = document.getElementById('extract-all-pages').checked;
+      parent.postMessage({ pluginMessage: { type: 'extract-strings', prefix, extractAllPages } }, '*');
+    };
+
+    document.getElementById('export-json').onclick = () => {
+      const strings = JSON.parse(document.getElementById('result').textContent);
+      parent.postMessage({ pluginMessage: { type: 'export-json', strings } }, '*');
+    };
+
+    document.getElementById('export-csv').onclick = () => {
+      const strings = JSON.parse(document.getElementById('result').textContent);
+      parent.postMessage({ pluginMessage: { type: 'export-csv', strings } }, '*');
+    };
+
+    onmessage = async (event) => {
+    const msg = event.data.pluginMessage;
+    if (msg.type === 'extraction-result') {
+      document.getElementById('result').textContent = JSON.stringify(msg.strings, null, 2);
+      document.getElementById('result').style.display = 'block';
+      document.getElementById('export-buttons').style.display = 'block';
+      document.getElementById('extract').textContent = 'Re-extract';
+    } else if (msg.type === 'extraction-error') {
+      document.getElementById('result').textContent = 'Error: ' + msg.error;
+      document.getElementById('result').style.display = 'block';
+      document.getElementById('export-buttons').style.display = 'none';
+    } else if (msg.type === 'export-file') {
+        try {
+          const blob = new Blob([msg.content], { type: msg.fileType });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = msg.fileName;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error('File saving failed:', error);
+          alert('File saving failed.');
+        }
+      }
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+    "name": "String Extractor",
+    "id": "1395974170055927320",
+    "api": "1.0.0",
+    "main": "code.js",
+    "ui": "ui.html",
+    "editorType": ["figma"],
+    "networkAccess": {
+      "allowedDomains": ["none"]
+    },
+    "documentAccess": "dynamic-page"
+  }
