@@ -24,10 +24,21 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       console.log('Extraction completed:', strings);
       
       // Select the extracted text layers
-      const nodesToSelect = await Promise.all(strings.map(str => figma.getNodeByIdAsync(str.nodeId)));
-      figma.currentPage.selection = nodesToSelect.filter((node): node is SceneNode => node !== null);
+      const nodesToSelect: SceneNode[] = [];
+      for (const str of strings) {
+        const node = await figma.getNodeByIdAsync(str.nodeId);
+        if (node) nodesToSelect.push(node as SceneNode);
+      }
       
-      figma.ui.postMessage({ type: 'extraction-result', strings });
+      if (!msg.extractAllPages) {
+        figma.currentPage.selection = nodesToSelect;
+      } else {
+        figma.currentPage.selection = [];
+      }
+
+      // Send strings without nodeId to the UI
+      const uiStrings = strings.map(({ key, value }) => ({ key, value }));
+      figma.ui.postMessage({ type: 'extraction-result', strings: uiStrings });
     } catch (error: unknown) {
       console.error('Extraction error:', error);
       let errorMessage = 'An unknown error occurred';
@@ -39,9 +50,12 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       figma.ui.postMessage({ type: 'extraction-error', error: errorMessage });
     }
   } else if (msg.type === 'export-json' && msg.strings) {
-    const jsonString = JSON.stringify(msg.strings, null, 2);
+    // Exclude nodeId from the exported strings
+    const exportStrings = msg.strings.map(({ key, value }) => ({ key, value }));
+    const jsonString = JSON.stringify(exportStrings, null, 2);
     figma.ui.postMessage({ type: 'export-file', content: jsonString, fileType: 'application/json', fileName: 'extracted_strings.json' });
   } else if (msg.type === 'export-csv' && msg.strings) {
+    // Exclude nodeId from the exported strings
     let csvContent = "Key,Value\n";
     msg.strings.forEach(({ key, value }) => {
       csvContent += `"${key}","${value.replace(/"/g, '""')}"\n`;
@@ -49,8 +63,6 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     figma.ui.postMessage({ type: 'export-file', content: csvContent, fileType: 'text/csv;charset=utf-8;', fileName: 'extracted_strings.csv' });
   }
 };
-
-
 
 async function extractStrings(prefix: string, extractAllPages: boolean): Promise<ExtractedString[]> {
   const stringsMap = new Map<string, ExtractedString>();
@@ -100,9 +112,13 @@ async function extractStrings(prefix: string, extractAllPages: boolean): Promise
 
   if (extractAllPages) {
     console.log('Extracting from all pages');
+    await figma.loadAllPagesAsync();
     for (const page of figma.root.children) {
-      console.log('Processing page:', page.name);
-      await traverseNode(page);
+      if (page.type === 'PAGE') {
+        console.log('Processing page:', page.name);
+        await page.loadAsync();
+        await traverseNode(page);
+      }
     }
   } else if (selection.length > 0) {
     console.log('Extracting from selection');

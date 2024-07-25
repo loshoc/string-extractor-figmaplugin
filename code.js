@@ -18,9 +18,21 @@ figma.ui.onmessage = (msg) => __awaiter(void 0, void 0, void 0, function* () {
             const strings = yield extractStrings(msg.prefix, msg.extractAllPages || false);
             console.log('Extraction completed:', strings);
             // Select the extracted text layers
-            const nodesToSelect = yield Promise.all(strings.map(str => figma.getNodeByIdAsync(str.nodeId)));
-            figma.currentPage.selection = nodesToSelect.filter((node) => node !== null);
-            figma.ui.postMessage({ type: 'extraction-result', strings });
+            const nodesToSelect = [];
+            for (const str of strings) {
+                const node = yield figma.getNodeByIdAsync(str.nodeId);
+                if (node)
+                    nodesToSelect.push(node);
+            }
+            if (!msg.extractAllPages) {
+                figma.currentPage.selection = nodesToSelect;
+            }
+            else {
+                figma.currentPage.selection = [];
+            }
+            // Send strings without nodeId to the UI
+            const uiStrings = strings.map(({ key, value }) => ({ key, value }));
+            figma.ui.postMessage({ type: 'extraction-result', strings: uiStrings });
         }
         catch (error) {
             console.error('Extraction error:', error);
@@ -35,10 +47,13 @@ figma.ui.onmessage = (msg) => __awaiter(void 0, void 0, void 0, function* () {
         }
     }
     else if (msg.type === 'export-json' && msg.strings) {
-        const jsonString = JSON.stringify(msg.strings, null, 2);
+        // Exclude nodeId from the exported strings
+        const exportStrings = msg.strings.map(({ key, value }) => ({ key, value }));
+        const jsonString = JSON.stringify(exportStrings, null, 2);
         figma.ui.postMessage({ type: 'export-file', content: jsonString, fileType: 'application/json', fileName: 'extracted_strings.json' });
     }
     else if (msg.type === 'export-csv' && msg.strings) {
+        // Exclude nodeId from the exported strings
         let csvContent = "Key,Value\n";
         msg.strings.forEach(({ key, value }) => {
             csvContent += `"${key}","${value.replace(/"/g, '""')}"\n`;
@@ -88,9 +103,13 @@ function extractStrings(prefix, extractAllPages) {
         console.log('Extraction settings:', { extractAllPages, selectionLength: selection.length });
         if (extractAllPages) {
             console.log('Extracting from all pages');
+            yield figma.loadAllPagesAsync();
             for (const page of figma.root.children) {
-                console.log('Processing page:', page.name);
-                yield traverseNode(page);
+                if (page.type === 'PAGE') {
+                    console.log('Processing page:', page.name);
+                    yield page.loadAsync();
+                    yield traverseNode(page);
+                }
             }
         }
         else if (selection.length > 0) {
