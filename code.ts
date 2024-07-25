@@ -5,6 +5,7 @@ figma.showUI(__html__, { width: 300, height: 220 });
 interface ExtractedString {
   key: string;
   value: string;
+  nodeId: string;
 }
 
 interface PluginMessage {
@@ -21,6 +22,11 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       console.log('Extraction started:', { prefix: msg.prefix, extractAllPages: msg.extractAllPages });
       const strings = await extractStrings(msg.prefix, msg.extractAllPages || false);
       console.log('Extraction completed:', strings);
+      
+      // Select the extracted text layers
+      const nodesToSelect = await Promise.all(strings.map(str => figma.getNodeByIdAsync(str.nodeId)));
+      figma.currentPage.selection = nodesToSelect.filter((node): node is SceneNode => node !== null);
+      
       figma.ui.postMessage({ type: 'extraction-result', strings });
     } catch (error: unknown) {
       console.error('Extraction error:', error);
@@ -43,6 +49,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     figma.ui.postMessage({ type: 'export-file', content: csvContent, fileType: 'text/csv;charset=utf-8;', fileName: 'extracted_strings.csv' });
   }
 };
+
+
 
 async function extractStrings(prefix: string, extractAllPages: boolean): Promise<ExtractedString[]> {
   const stringsMap = new Map<string, ExtractedString>();
@@ -74,14 +82,11 @@ async function extractStrings(prefix: string, extractAllPages: boolean): Promise
       
       console.log('Found matching text node:', { key, value: styledText });
       if (!stringsMap.has(styledText)) {
-        stringsMap.set(styledText, { key, value: styledText });
+        stringsMap.set(styledText, { key, value: styledText, nodeId: node.id });
       }
     }
 
     if ('children' in node) {
-      if (node.type === 'PAGE') {
-        await node.loadAsync();
-      }
       for (const child of (node as ChildrenMixin).children) {
         await traverseNode(child);
       }
@@ -95,7 +100,6 @@ async function extractStrings(prefix: string, extractAllPages: boolean): Promise
 
   if (extractAllPages) {
     console.log('Extracting from all pages');
-    await figma.loadAllPagesAsync();
     for (const page of figma.root.children) {
       console.log('Processing page:', page.name);
       await traverseNode(page);
