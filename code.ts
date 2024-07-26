@@ -118,27 +118,26 @@ async function extractStrings(prefix: string, extractAllPages: boolean): Promise
 
   function getUIPageInstance(node: SceneNode): InstanceNode | null {
     let current: BaseNode | null = node;
-    let target375Instance: InstanceNode | null = null;
-    let fallbackInstance: InstanceNode | null = null;
+    let closestInstance: InstanceNode | null = null;
+    let closestHeightDifference = Infinity;
 
     while (current) {
-      if (current.type === 'INSTANCE' && 'width' in current && 'height' in current) {
-        if (Math.abs(current.width - 375) < 0.1) {
-          if (current.height >= 812) {
-            // Preferred instance found
-            return current;
-          } else if (!fallbackInstance) {
-            // Keep this as a fallback if we don't find a taller instance
-            fallbackInstance = current;
-          }
+        if (current.type === 'INSTANCE' && 'width' in current && 'height' in current) {
+            if (Math.abs(current.width - 375) < 0.1) {
+                let heightDifference = Math.abs(current.height - 812);
+                if (heightDifference < closestHeightDifference) {
+                    // Update the closest instance and height difference
+                    closestInstance = current as InstanceNode;
+                    closestHeightDifference = heightDifference;
+                }
+            }
         }
-      }
-      current = current.parent;
+        current = current.parent;
     }
 
-    // Use the fallback if no preferred instance was found
-    return fallbackInstance;
-  }
+    // Return the instance with the closest height to 812px
+    return closestInstance;
+}
 
   function getUIPageName(node: SceneNode): string {
     if (instanceCache.has(node.id)) {
@@ -171,18 +170,19 @@ async function extractStrings(prefix: string, extractAllPages: boolean): Promise
   }
 
   function generateUniqueKey(node: TextNode, uiPageName: string, index: number): string {
-    const positionNumber = index.toString().padStart(3, '0');
+    const positionNumber = index.toString().padStart(1, '0');
     const shortId = node.id.slice(-6).replace(':', '_');
     const key = `${uiPageName}_${positionNumber}_${shortId}`;
     return key.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
   }
-
+  
   async function processTextNodesInUIPage(textNodes: TextNode[], prefix: string, uiPageName: string) {
+    // Sort text nodes to maintain visual order (top-to-bottom, left-to-right)
     textNodes.sort((a, b) => {
       if (a.y !== b.y) return a.y - b.y;
       return a.x - b.x;
     });
-
+  
     for (let i = 0; i < textNodes.length; i++) {
       const textNode = textNodes[i];
       const uniqueKey = generateUniqueKey(textNode, uiPageName, i + 1);
@@ -204,7 +204,7 @@ async function extractStrings(prefix: string, extractAllPages: boolean): Promise
       } else {
         console.log('Skipping duplicate value:', styledText);
       }
-
+  
       // Yield to the main thread every 20 nodes
       if (i % 20 === 0) {
         await new Promise(resolve => setTimeout(resolve, 0));

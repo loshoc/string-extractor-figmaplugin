@@ -104,25 +104,23 @@ function extractStrings(prefix, extractAllPages) {
         }
         function getUIPageInstance(node) {
             let current = node;
-            let target375Instance = null;
-            let fallbackInstance = null;
+            let closestInstance = null;
+            let closestHeightDifference = Infinity;
             while (current) {
                 if (current.type === 'INSTANCE' && 'width' in current && 'height' in current) {
                     if (Math.abs(current.width - 375) < 0.1) {
-                        if (current.height >= 812) {
-                            // Preferred instance found
-                            return current;
-                        }
-                        else if (!fallbackInstance) {
-                            // Keep this as a fallback if we don't find a taller instance
-                            fallbackInstance = current;
+                        let heightDifference = Math.abs(current.height - 812);
+                        if (heightDifference < closestHeightDifference) {
+                            // Update the closest instance and height difference
+                            closestInstance = current;
+                            closestHeightDifference = heightDifference;
                         }
                     }
                 }
                 current = current.parent;
             }
-            // Use the fallback if no preferred instance was found
-            return fallbackInstance;
+            // Return the instance with the closest height to 812px
+            return closestInstance;
         }
         function getUIPageName(node) {
             if (instanceCache.has(node.id)) {
@@ -152,13 +150,14 @@ function extractStrings(prefix, extractAllPages) {
             return 'Unknown';
         }
         function generateUniqueKey(node, uiPageName, index) {
-            const positionNumber = index.toString().padStart(3, '0');
+            const positionNumber = index.toString().padStart(1, '0');
             const shortId = node.id.slice(-6).replace(':', '_');
             const key = `${uiPageName}_${positionNumber}_${shortId}`;
             return key.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
         }
         function processTextNodesInUIPage(textNodes, prefix, uiPageName) {
             return __awaiter(this, void 0, void 0, function* () {
+                // Sort text nodes to maintain visual order (top-to-bottom, left-to-right)
                 textNodes.sort((a, b) => {
                     if (a.y !== b.y)
                         return a.y - b.y;
