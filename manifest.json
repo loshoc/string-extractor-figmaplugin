@@ -5,6 +5,7 @@
     "main": "code.js",
     "ui": "ui.html",
     "editorType": ["figma","dev"],
+    "capabilities": ["inspect"],
     "networkAccess": {
       "allowedDomains": ["none"]
     },
